@@ -10,6 +10,8 @@ class Impulse(RealSignal):
     def __init__(self, start_time: float or int = 0, end_time: float or int = 0,
                  switch_time: float or int = None, strength: float = 1, *args, **kwargs):
         """
+        :param start_time: 开始时间
+        :param end_time: 停止时间
         :param switch_time: 信号状态切换时间
         :param strength: 强度
         :param args: 其他基类参数
@@ -45,6 +47,8 @@ class Step(RealSignal):
     def __init__(self, start_time: float or int = 0, end_time: float or int = 0,
                  switch_time: float or int = None, strength: float = 1, *args, **kwargs):
         """
+        :param start_time: 开始时间
+        :param end_time: 停止时间
         :param switch_time: 信号状态切换时间
         :param strength: 强度
         :param args: 其他基类参数
