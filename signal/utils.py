@@ -1,7 +1,7 @@
 from .base import RealSignal
 
 
-class Sample(RealSignal):
+class Sampler(RealSignal):
     """
     连续信号采样器
     """
@@ -18,7 +18,7 @@ class Sample(RealSignal):
         end_time = signal.end_time
         delta_time = (end_time - start_time) / (sample_num - 1)
         self.signal = signal
-        super(Sample, self).__init__(*args, start_time=start_time, end_time=end_time, delta_time=delta_time, **kwargs)
+        super(Sampler, self).__init__(*args, start_time=start_time, end_time=end_time, delta_time=delta_time, **kwargs)
 
     def __kernel__(self, time: float or int) -> float:
         return self.signal[time]

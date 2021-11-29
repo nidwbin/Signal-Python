@@ -7,14 +7,15 @@ class Impulse(RealSignal):
     实数冲激信号
     """
 
-    def __init__(self, *args, switch_time: float or int = None, strength: float = 1, **kwargs):
+    def __init__(self, start_time: float or int = 0, end_time: float or int = 0,
+                 switch_time: float or int = None, strength: float = 1, *args, **kwargs):
         """
         :param switch_time: 信号状态切换时间
         :param strength: 强度
         :param args: 其他基类参数
         :param kwargs: 其他基类参数
         """
-        super(Impulse, self).__init__(*args, **kwargs)
+        super(Impulse, self).__init__(start_time, end_time, *args, **kwargs)
         self.strength = strength
         if switch_time is None:
             # 默认值，选开始和结束时间的中点
@@ -41,14 +42,15 @@ class Step(RealSignal):
     实数阶跃信号
     """
 
-    def __init__(self, *args, switch_time: float or int = None, strength: float = 1, **kwargs):
+    def __init__(self, start_time: float or int = 0, end_time: float or int = 0,
+                 switch_time: float or int = None, strength: float = 1, *args, **kwargs):
         """
         :param switch_time: 信号状态切换时间
         :param strength: 强度
         :param args: 其他基类参数
         :param kwargs: 其他基类参数
         """
-        super(Step, self).__init__(*args, **kwargs)
+        super(Step, self).__init__(start_time, end_time, *args, **kwargs)
         self.strength = strength
         if switch_time is None:
             # 默认值，选开始和结束时间的中点
