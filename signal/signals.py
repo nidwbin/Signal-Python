@@ -1,3 +1,4 @@
+import math
 from collections.abc import Callable
 from .base import RealSignal, PluralSignal
 
@@ -33,10 +34,7 @@ class Impulse(RealSignal):
         self.switch_time = self.switch_time * self.delta_time + self.start_time
 
     def __kernel__(self, time: float or int) -> float:
-        """
-        浮点数比较存在精度误差，进行容错处理，误差<=delta time
-        """
-        return self.strength if 0 <= time - self.switch_time < self.delta_time else 0.0
+        return self.strength if time == self.switch_time else 0
 
 
 class Step(RealSignal):
@@ -87,14 +85,12 @@ class RealFormulaSignal(RealSignal):
         self.formula = formula
         super(RealFormulaSignal, self).__init__(*args, **kwargs)
 
-    def __kernel__(self, time: float or int):
+    def __kernel__(self, time: float or int) -> float:
         return self.formula(time)
 
 
 class PluralFormulaSignal(PluralSignal):
-    """
-    使用复数公式或函数构建信号
-    """
+    # 使用复数公式或函数构建信号
 
     def __init__(self, formula: Callable[float or int], *args, **kwargs):
         """
@@ -105,5 +101,19 @@ class PluralFormulaSignal(PluralSignal):
         self.formula = formula
         super(PluralFormulaSignal, self).__init__(*args, **kwargs)
 
-    def __kernel__(self, time: float or int):
+    def __kernel__(self, time: float or int) -> (float, float):
         return self.formula(time)
+
+
+class SamplerSignal(RealSignal):
+    # 采样信号
+
+    def __init__(self, *args, **kwargs):
+        """
+        :param args: 其他基类参数
+        :param kwargs: 其他基类参数
+        """
+        super(SamplerSignal, self).__init__(*args, **kwargs)
+
+    def __kernel__(self, time: float or int) -> float:
+        return math.sin(time) / time
