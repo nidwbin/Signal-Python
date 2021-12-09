@@ -15,14 +15,14 @@ class Sampler(RealSignal):
         :param kwargs: 其他基类参数
         """
         assert signal.signal_type is float
-        start_time = signal.start_time
-        end_time = signal.end_time
-        rate = (sample_num - 1) / (start_time - end_time)
+        start = signal.start
+        end = signal.end
+        rate = (sample_num - 1) / (start - end)
         self.signal = signal
-        super(Sampler, self).__init__(*args, start_time=start_time, end_time=end_time, rate=rate, **kwargs)
+        super(Sampler, self).__init__(*args, start=start, end=end, rate=rate, **kwargs)
 
-    def __kernel__(self, time: float or int) -> float:
-        return self.signal[time]
+    def __kernel__(self, var: float or int) -> float:
+        return self.signal[var]
 
 
 class Recurrence(RealSignal):
@@ -37,15 +37,15 @@ class Recurrence(RealSignal):
         self.response_params = response_params
         self.input_signal = input_signal
         self.input_params = input_params
-        super(Recurrence, self).__init__(*args, start_time=input_signal.start_time, end_time=input_signal.end_time,
+        super(Recurrence, self).__init__(*args, start=input_signal.start, end=input_signal.end,
                                          rate=input_signal.rate, **kwargs)
 
-    def __kernel__(self, time: float or int) -> float:
+    def __kernel__(self, var: float or int) -> float:
         result = 0
         for i in range(len(self.input_params)):
-            result += self.input_signal[time - i * self.input_signal.delta_time] * self.input_params[i]
+            result += self.input_signal[var - i * self.input_signal.delta] * self.input_params[i]
         for i in range(1, len(self.response_params)):
-            result -= self[time - i * self.delta_time] * self.response_params[i]
+            result -= self[var - i * self.delta] * self.response_params[i]
         return result
 
 
@@ -59,8 +59,8 @@ class RealToPlural(PluralSignal):
         :param signal:
         """
         self.signal = signal
-        super(RealToPlural, self).__init__(start_time=signal.start_time, end_time=signal.end_time,
+        super(RealToPlural, self).__init__(start=signal.start, end=signal.end,
                                            rate=signal.rate, signal_type=signal.signal_type, **kwargs)
 
-    def __kernel__(self, time: float or int) -> (float, float):
-        return self.signal[time], 0
+    def __kernel__(self, var: float or int) -> (float, float):
+        return self.signal[var], 0

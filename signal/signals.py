@@ -8,33 +8,33 @@ class Impulse(RealSignal):
     实数冲激信号
     """
 
-    def __init__(self, start_time: float or int = 0, end_time: float or int = 0,
-                 switch_time: float or int = None, strength: float = 1, *args, **kwargs):
+    def __init__(self, start: float or int = 0, end: float or int = 0,
+                 switch: float or int = None, strength: float = 1, *args, **kwargs):
         """
-        :param start_time: 开始时间
-        :param end_time: 停止时间
-        :param switch_time: 信号状态切换时间
+        :param start: 开始时间
+        :param end: 停止时间
+        :param switch: 信号状态切换时间
         :param strength: 强度
         :param args: 其他基类参数
         :param kwargs: 其他基类参数
         """
-        super(Impulse, self).__init__(start_time, end_time, *args, **kwargs)
+        super(Impulse, self).__init__(start, end, *args, **kwargs)
         self.strength = strength
-        if switch_time is None:
+        if switch is None:
             # 默认值，选开始和结束时间的中点
             if self.signal_type is int:
-                self.switch_time = (self.start_time + self.end_time) // 2
+                self.switch = (self.start + self.end) // 2
             else:
-                self.switch_time = (self.start_time + self.end_time) / 2
+                self.switch = (self.start + self.end) / 2
         else:
-            assert self.start_time <= switch_time <= self.end_time
-            self.switch_time = switch_time
-        # 冲激时间与最小时间片对齐
-        self.switch_time = (self.switch_time - self.start_time) // self.delta_time
-        self.switch_time = self.switch_time * self.delta_time + self.start_time
+            assert self.start <= switch <= self.end
+            self.switch = switch
+        # 冲激时间与最小间隔对齐
+        self.switch = (self.switch - self.start) // self.delta
+        self.switch = self.switch * self.delta + self.start
 
-    def __kernel__(self, time: float or int) -> float:
-        return self.strength if time == self.switch_time else 0
+    def __kernel__(self, var: float or int) -> float:
+        return self.strength if var == self.switch else 0
 
 
 class Step(RealSignal):
@@ -42,33 +42,33 @@ class Step(RealSignal):
     实数阶跃信号
     """
 
-    def __init__(self, start_time: float or int = 0, end_time: float or int = 0,
-                 switch_time: float or int = None, strength: float = 1, *args, **kwargs):
+    def __init__(self, start: float or int = 0, end: float or int = 0,
+                 switch: float or int = None, strength: float = 1, *args, **kwargs):
         """
-        :param start_time: 开始时间
-        :param end_time: 停止时间
-        :param switch_time: 信号状态切换时间
+        :param start: 开始时间
+        :param end: 停止时间
+        :param switch: 信号状态切换时间
         :param strength: 强度
         :param args: 其他基类参数
         :param kwargs: 其他基类参数
         """
-        super(Step, self).__init__(start_time, end_time, *args, **kwargs)
+        super(Step, self).__init__(start, end, *args, **kwargs)
         self.strength = strength
-        if switch_time is None:
+        if switch is None:
             # 默认值，选开始和结束时间的中点
             if self.signal_type is int:
-                self.switch_time = (self.start_time + self.end_time) // 2
+                self.switch = (self.start + self.end) // 2
             else:
-                self.switch_time = (self.start_time + self.end_time) / 2
+                self.switch = (self.start + self.end) / 2
         else:
-            assert self.start_time <= switch_time <= self.end_time
-            self.switch_time = switch_time
+            assert self.start <= switch <= self.end
+            self.switch = switch
         # 阶跃时间与最小时间片对齐
-        self.switch_time = (self.switch_time - self.start_time) // self.delta_time
-        self.switch_time = self.switch_time * self.delta_time + self.start_time
+        self.switch = (self.switch - self.start) // self.delta
+        self.switch = self.switch * self.delta + self.start
 
-    def __kernel__(self, time: float or int) -> float:
-        return self.strength if time >= self.switch_time else 0.0
+    def __kernel__(self, var: float or int) -> float:
+        return self.strength if var >= self.switch else 0.0
 
 
 class RealFormulaSignal(RealSignal):
@@ -85,8 +85,8 @@ class RealFormulaSignal(RealSignal):
         self.formula = formula
         super(RealFormulaSignal, self).__init__(*args, **kwargs)
 
-    def __kernel__(self, time: float or int) -> float:
-        return self.formula(time)
+    def __kernel__(self, var: float or int) -> float:
+        return self.formula(var)
 
 
 class PluralFormulaSignal(PluralSignal):
@@ -101,8 +101,8 @@ class PluralFormulaSignal(PluralSignal):
         self.formula = formula
         super(PluralFormulaSignal, self).__init__(*args, **kwargs)
 
-    def __kernel__(self, time: float or int) -> (float, float):
-        return self.formula(time)
+    def __kernel__(self, var: float or int) -> (float, float):
+        return self.formula(var)
 
 
 class SamplerSignal(RealSignal):
@@ -115,5 +115,5 @@ class SamplerSignal(RealSignal):
         """
         super(SamplerSignal, self).__init__(*args, **kwargs)
 
-    def __kernel__(self, time: float or int) -> float:
-        return math.sin(time) / time
+    def __kernel__(self, var: float or int) -> float:
+        return math.sin(var) / var
