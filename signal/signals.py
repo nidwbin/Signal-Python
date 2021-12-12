@@ -105,6 +105,42 @@ class PluralFormulaSignal(PluralSignal):
         return self.formula(var)
 
 
+class RealSeqSignal(RealSignal):
+    """
+    使用迭代列表构建信号
+    """
+
+    def __init__(self, seq: list or tuple, *args, **kwargs):
+        """
+        :param seq: 可迭代的数据列表
+        :param args: 其他基类参数
+        :param kwargs: 其他基类参数
+        """
+        self.seq = seq
+        super(RealSeqSignal, self).__init__(*args, **kwargs)
+
+    def __kernel__(self, var: float or int) -> float:
+        var = int((var - self.start) / self.delta)
+        return self.seq[var] if var < len(self.seq) else 0
+
+
+class PluralSeqSignal(PluralSignal):
+    # 使用复数迭代列表构建信号
+
+    def __init__(self, seq: list or tuple, *args, **kwargs):
+        """
+        :param seq: 可迭代的数据列表
+        :param args: 其他基类参数
+        :param kwargs: 其他基类参数
+        """
+        self.seq = seq
+        super(PluralSeqSignal, self).__init__(*args, **kwargs)
+
+    def __kernel__(self, var: float or int) -> (float, float):
+        var = int((var - self.start) / self.delta)
+        return self.seq[var] if var < len(self.seq) else 0, 0
+
+
 class SamplerSignal(RealSignal):
     # 采样信号
 

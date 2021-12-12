@@ -1,5 +1,6 @@
 import abc
 import math
+import os
 
 from matplotlib import pyplot
 from matplotlib.pyplot import MultipleLocator
@@ -17,7 +18,8 @@ class Signal(Drawable, metaclass=abc.ABCMeta):
     # 信号基类
 
     def __init__(self, start: float or int = 0, end: float or int = 0, rate: float or int = 1,
-                 signal_type=int, zero_hold: bool = False, deviation: float = 1e-10, cache: bool = True):
+                 signal_type=int, cycle: bool = False, zero_hold: bool = False, deviation: float = 1e-10,
+                 cache: bool = True, save: bool = False, save_dir: str = './'):
         """
         :param start: 开始时间
         :param end: 结束时间
@@ -31,6 +33,9 @@ class Signal(Drawable, metaclass=abc.ABCMeta):
         self.deviation = deviation
         assert signal_type in [int, float]
         self.signal_type = signal_type
+
+        self.cycle = cycle
+
         assert rate > 0
         self.delta = 1 / rate
         self.rate = rate
@@ -42,32 +47,43 @@ class Signal(Drawable, metaclass=abc.ABCMeta):
         self.cache_list = []
         self.var_list = []
 
+        self.save = save
+        if self.save:
+            assert os.path.exists(save_dir)
+        self.save_dir = save_dir
+
+    def __len__(self) -> int:
+        return math.floor((self.end - self.start) / self.delta) + 1
+
     def __iter__(self):
         raise NotImplementedError
 
     def __getitem__(self, var: float or int):
-        if var < self.start or var > self.end:
-            return 0
-        else:
-            if self.signal_type is int:
-                # 离散信号，采样率对齐，若未使用0阶保持器，采样点外一律为0
-                mul = round((var - self.start) / self.delta)
-                if self.zero_hold or math.isclose(var, self.start + self.delta * mul,
-                                                  abs_tol=self.deviation):
-                    # 使用0阶保持器或在浮点数计算误差范围之内
-                    var = self.start + self.delta * mul
-                else:
-                    return 0
-            if self.cache:
-                if var in self.var_list:
-                    ret = self.cache_list[self.var_list.index(var)]
-                else:
-                    ret = self.__kernel__(var)
-                    self.cache_list.append(ret)
-                    self.var_list.append(var)
+        if self.cycle:
+            var = (var - self.start) % (self.end - self.start + self.delta) + self.start
+
+        if self.signal_type is int:
+            # 离散信号，采样率对齐，若未使用0阶保持器，采样点外一律为0
+            mul = round((var - self.start) / self.delta)
+            if self.zero_hold or math.isclose(var, self.start + self.delta * mul,
+                                              abs_tol=self.deviation):
+                # 使用0阶保持器或在浮点数计算误差范围之内
+                var = self.start + self.delta * mul
+            else:
+                return 0
+        if self.cache:
+            if var in self.var_list:
+                ret = self.cache_list[self.var_list.index(var)]
             else:
                 ret = self.__kernel__(var)
-            return ret
+                self.cache_list.append(ret)
+                self.var_list.append(var)
+        else:
+            ret = self.__kernel__(var)
+        return ret
+
+    def get_nth(self, n: int):
+        return self[self.start + self.delta * n]
 
     def __kernel__(self, var: float or int):
         """
@@ -78,19 +94,26 @@ class Signal(Drawable, metaclass=abc.ABCMeta):
         """
         raise NotImplementedError
 
-    def __stem__(self, t: list, x: list, x_label: str, t_label: str = "时间"):
+    def __stem__(self, t: list, x: list, x_label: str, t_label: str = "时间", save_name: str = '1.png'):
         if self.delta / (self.end - self.start) >= 0.05:
             pyplot.gca().xaxis.set_major_locator(MultipleLocator(self.delta))
         pyplot.stem(t, x)
         pyplot.xlabel(t_label)
         pyplot.ylabel(x_label)
+        if self.save:
+            pyplot.savefig(os.path.join(self.save_dir, save_name), bbox_inches='tight')
         pyplot.show()
 
     def solve(self):
         return zip(*list(self))
 
+    def clear(self):
+        self.cache_list.clear()
+        self.var_list.clear()
+
     def update(self, start: float or int = None, end: float or int = None, rate: float or int = None,
-               signal_type=None, zero_hold: bool = None, deviation: float = None, cache: bool = None):
+               signal_type=None, cycle=None, zero_hold: bool = None, deviation: float = None, cache: bool = None,
+               save=None, save_dir=None):
         if start is not None:
             self.start = start
         if end is not None:
@@ -103,18 +126,27 @@ class Signal(Drawable, metaclass=abc.ABCMeta):
         if signal_type is not None:
             assert signal_type in [int, float]
             self.signal_type = signal_type
+        if cycle is not None:
+            self.cycle = cycle
         if zero_hold is not None:
             self.zero_hold = zero_hold
         if deviation is not None:
             self.deviation = deviation
         if cache is not None:
             self.cache = cache
+        if save is not None:
+            self.save = save
+        if save_dir is not None:
+            if self.save:
+                assert os.path.exists(save_dir)
+            self.save_dir = save_dir
 
-    @staticmethod
-    def __plot__(t: list, x: list, x_label: str, t_label: str = "时间"):
+    def __plot__(self, t: list, x: list, x_label: str, t_label: str = "时间", save_name: str = '1.png'):
         pyplot.plot(t, x)
         pyplot.xlabel(t_label)
         pyplot.ylabel(x_label)
+        if self.save:
+            pyplot.savefig(os.path.join(self.save_dir, save_name), bbox_inches='tight')
         pyplot.show()
 
 
@@ -154,6 +186,13 @@ class RealSignal(Signal, metaclass=abc.ABCMeta):
             cnt += 1
             now = self.start + self.delta * cnt
 
+    def __getitem__(self, var: float or int) -> float:
+        if not self.cycle and var < self.start or var > self.end:
+            return 0
+        ret = super(RealSignal, self).__getitem__(var)
+        ret = 0 if math.isclose(ret, 0, abs_tol=self.deviation) else ret
+        return ret
+
     def update(self, t_label=None, x_label=None, **kwargs):
         if t_label is not None:
             self.t_label = t_label
@@ -164,9 +203,9 @@ class RealSignal(Signal, metaclass=abc.ABCMeta):
     def draw(self):
         t, y = self.solve()
         if self.signal_type is int:
-            self.__stem__(t, y, x_label=self.x_label, t_label=self.t_label)
+            self.__stem__(t, y, x_label=self.x_label, t_label=self.t_label, save_name='1.png')
         else:
-            self.__plot__(t, y, x_label=self.x_label, t_label=self.t_label)
+            self.__plot__(t, y, x_label=self.x_label, t_label=self.t_label, save_name='1.png')
 
 
 class PluralSignal(Signal, metaclass=abc.ABCMeta):
@@ -207,14 +246,24 @@ class PluralSignal(Signal, metaclass=abc.ABCMeta):
             cnt += 1
             now = self.start + self.delta * cnt
 
-    @staticmethod
-    def __plot_3d__(t: list, x: list, y: list, x_label: str, y_label: str, t_label: str = "时间"):
+    def __getitem__(self, var: float or int) -> (float, float):
+        if not self.cycle and var < self.start or var > self.end:
+            return 0, 0
+        ret1, ret2 = super(PluralSignal, self).__getitem__(var)
+        ret1 = 0 if math.isclose(ret1, 0, abs_tol=self.deviation) else ret1
+        ret2 = 0 if math.isclose(ret2, 0, abs_tol=self.deviation) else ret2
+        return ret1, ret2
+
+    def __plot_3d__(self, t: list, x: list, y: list, x_label: str, y_label: str, t_label: str = "时间",
+                    save_name: str = '1.png'):
         ax = pyplot.axes(projection="3d")
         ax.scatter3D(t, x, y)
         ax.plot3D(t, x, y)
         ax.set_xlabel(t_label)
         ax.set_ylabel(x_label)
         ax.set_zlabel(y_label)
+        if self.save:
+            pyplot.savefig(os.path.join(self.save_dir, save_name), bbox_inches='tight')
         pyplot.show()
 
     def update(self, t_label=None, x_label=None, y_label=None, **kwargs):
@@ -228,15 +277,15 @@ class PluralSignal(Signal, metaclass=abc.ABCMeta):
 
     def draw(self):
         t, x, y = self.solve()
-        self.__plot_3d__(t, x, y, self.x_label, self.y_label, self.t_label)
+        self.__plot_3d__(t, x, y, self.x_label, self.y_label, self.t_label, '1.png')
         if self.signal_type is int:
-            self.__stem__(t, x, self.x_label, self.t_label)
-            self.__stem__(t, y, self.y_label, self.t_label)
+            self.__stem__(t, x, self.x_label, self.t_label, '2.png')
+            self.__stem__(t, y, self.y_label, self.t_label, '3.png')
             pyplot.scatter(x, y)
         else:
-            self.__plot__(t, x, self.x_label, self.t_label)
-            self.__plot__(t, y, self.y_label, self.t_label)
-        self.__plot__(x, y, self.y_label, self.x_label)
+            self.__plot__(t, x, self.x_label, self.t_label, '2.png')
+            self.__plot__(t, y, self.y_label, self.t_label, '3.png')
+        self.__plot__(x, y, self.y_label, self.x_label, '4.png')
 
 
 class MultiRealSignal(RealSignal, metaclass=abc.ABCMeta):
@@ -257,8 +306,8 @@ class MultiRealSignal(RealSignal, metaclass=abc.ABCMeta):
         self.signal2 = signal2
         assert multi_type in ["+", "-", "*", "**"]
         self.multi_type = multi_type
-        super(MultiRealSignal, self).__init__(*args, start=min(signal1.start, signal2.start),
-                                              end=max(signal1.end, signal2.end),
+        end = len(signal1) + len(signal2) - 2 if multi_type == "**" else max(signal1.end, signal2.end)
+        super(MultiRealSignal, self).__init__(*args, start=min(signal1.start, signal2.start), end=end,
                                               rate=rate, signal_type=signal_type, **kwargs)
 
     def __getitem__(self, var: float or int) -> float:
@@ -280,13 +329,14 @@ class MultiRealSignal(RealSignal, metaclass=abc.ABCMeta):
                 ret += self.signal1[delt] * self.signal2[var - delt]
                 cnt += 1
                 delt = self.start + self.delta * cnt
+        ret = 0 if math.isclose(ret, 0, abs_tol=self.deviation) else ret
         if self.cache:
             self.var_list.append(var)
             self.cache_list.append(ret)
         return ret
 
 
-class MultiPluralSignal(RealSignal, metaclass=abc.ABCMeta):
+class MultiPluralSignal(PluralSignal, metaclass=abc.ABCMeta):
     # 复合复数信号基类
 
     def __init__(self, signal1: PluralSignal, signal2: PluralSignal, multi_type: str, *args, **kwargs):
@@ -304,13 +354,13 @@ class MultiPluralSignal(RealSignal, metaclass=abc.ABCMeta):
         self.signal2 = signal2
         assert multi_type in ["+", "-", "*", "**"]
         self.multi_type = multi_type
-        super(MultiPluralSignal, self).__init__(*args, start=min(signal1.start, signal2.start),
-                                                end=max(signal1.end, signal2.end),
+        end = len(signal1) + len(signal2) - 2 if multi_type == "**" else max(signal1.end, signal2.end)
+        super(MultiPluralSignal, self).__init__(*args, start=min(signal1.start, signal2.start), end=end,
                                                 rate=rate, signal_type=signal_type, **kwargs)
 
     def __getitem__(self, var: float or int) -> (float, float):
         if var < self.start or var > self.end:
-            return 0, 0
+            return 0.0, 0.0
         if self.cache and var in self.var_list:
             return self.cache_list[self.var_list.index(var)]
         x1, y1 = self.signal1[var]
@@ -336,6 +386,8 @@ class MultiPluralSignal(RealSignal, metaclass=abc.ABCMeta):
                 ret2 += x1 * y2 + x2 * y1
                 cnt += 1
                 delt = self.start + self.delta * cnt
+        ret1 = 0 if math.isclose(ret1, 0, abs_tol=self.deviation) else ret1
+        ret2 = 0 if math.isclose(ret2, 0, abs_tol=self.deviation) else ret2
         if self.cache:
             self.var_list.append(var)
             self.cache_list.append((ret1, ret2))
