@@ -1,64 +1,79 @@
 import os
-import math
 import numpy
-from signal.signals import RealSeqSignal
-from signal.utils import DFT, IDFT, DTFT
+import pywt
+from PIL import Image
+from image import Noise, Filter, Mask
+from skimage.metrics import peak_signal_noise_ratio
 
 
-def formula(M):
-    xa = numpy.arange(0, math.floor(M / 2) + 1)
-    xb = numpy.arange(math.ceil(M / 2) - 1, -1, -1)
-    x = numpy.concatenate((xa, xb))
-    return x
+def noise():
+    img = numpy.array(Image.open(image))
+    Image.fromarray(Noise.random(img, 10000)).save(os.path.join(save_dir, '1.png'))
+    Image.fromarray(Noise.salt_pepper(img, 0.05)).save(os.path.join(save_dir, '2.png'))
+    Image.fromarray(Noise.gaussian(img)).save(os.path.join(save_dir, '3.png'))
+
+    f = Filter()
+    for i in range(1, 4):
+        Image.fromarray(f.mean(numpy.array(Image.open(os.path.join(save_dir, f'{i}.png'))))).save(
+            os.path.join(save_dir, f'{i}_1_1.png'))
+        Image.fromarray(f.median(numpy.array(Image.open(os.path.join(save_dir, f'{i}.png'))))).save(
+            os.path.join(save_dir, f'{i}_1_2.png'))
+        Image.fromarray(f.gaussian(numpy.array(Image.open(os.path.join(save_dir, f'{i}.png'))))).save(
+            os.path.join(save_dir, f'{i}_1_3.png'))
+
+    for label in range(2):
+        for n in range(1, 4):
+            out = numpy.array(Image.open(os.path.join(save_dir, f'{n}.png')))
+            img = numpy.copy(out)
+            for i in range(img.shape[-1]):
+                timg = img[:, :, i]
+                ft = numpy.fft.fft2(timg)
+                ft_shift = numpy.fft.fftshift(ft)
+                mask = Mask.low_pass_filter(ft_shift, radius=200) if label == 0 else Mask.band_reject_filters(ft_shift,
+                                                                                                              r_out=300,
+                                                                                                              r_in=50)
+                ft_shift = ft_shift * mask
+                ft = numpy.fft.ifftshift(ft_shift)
+                timg = numpy.abs(numpy.fft.ifft2(ft)).clip(0, 255)
+                out[:, :, i] = numpy.uint8(timg)
+            Image.fromarray(out).save(os.path.join(save_dir, f'{n}_2_{label + 1}.png'))
+
+    threshold = 0.2
+    modes = ['soft', 'hard', 'greater', 'less']
+    for label in range(4):
+        for n in range(1, 4):
+            out = numpy.array(Image.open(os.path.join(save_dir, f'{n}.png')))
+            img = numpy.copy(out)
+            for i in range(img.shape[-1]):
+                timg = img[:, :, i]
+                dwt = pywt.wavedec2(timg, 'db8')
+                for j in range(1, len(dwt)):
+                    l = []
+                    for k in range(len(dwt[j])):
+                        l.append(pywt.threshold(dwt[j][k], threshold * numpy.max(dwt[j][k]), mode=modes[label]))
+                    dwt[j] = tuple(l)
+                timg = numpy.clip(pywt.waverec2(dwt, 'db8'), 0, 255)
+                out[:, :, i] = numpy.uint8(timg)
+            Image.fromarray(out).save(os.path.join(save_dir, f'{n}_3_{label + 1}.png'))
+
+
+def psnr():
+    img = numpy.array(Image.open(image))
+    ans = {}
+    for i in range(1, 4):
+        name = os.path.join(save_dir, f'{i}.png')
+        ans[name] = peak_signal_noise_ratio(img, numpy.array(Image.open(name)))
+        for j in range(1, 4):
+            for k in range(1, 5):
+                name = os.path.join(save_dir, f'{i}_{j}_{k}.png')
+                if os.path.exists(name):
+                    ans[name] = peak_signal_noise_ratio(img, numpy.array(Image.open(name)))
+    for k, v in ans.items():
+        print(k.split('/')[-1], v)
 
 
 if __name__ == '__main__':
-    for N in [8, 16, 32, 64]:
-        R_5 = RealSeqSignal([1 for i in range(5)], start=0, end=4)
-        dft = DFT(R_5, length=N)
-        dir_name = f'./1_{N}'
-        os.mkdir(dir_name)
-        dft.update(t_label=r"$k$", x_label=r"$Re(X(k))$", y_label=r"$Im(X(k))$", save=True, save_dir=dir_name)
-        dft.draw()
-    M = 27
-    x = RealSeqSignal(formula(M), 0, M)
-
-    dtft = DTFT(x, -10, 10, rate=100)
-    dir_name = f'./2_dtft'
-    os.mkdir(dir_name)
-    dtft.update(t_label=r"$\omega$", x_label=r"$Re(X(e^{j\omega}))$", y_label=r"$Im(X(e^{j\omega}))$", save=True,
-                save_dir=dir_name)
-    dtft.draw()
-
-    for N in [8, 16, 32, 64, 128]:
-        dft = DFT(x, length=N)
-        dir_name = f'./2_{N}'
-        os.mkdir(dir_name)
-        dft.update(t_label=r"$k$", x_label=r"$Re(X(k))$", y_label=r"$Im(X(k))$", save=True, save_dir=dir_name)
-        dft.draw()
-    for N in [8, 16, 32, 64, 128]:
-        dft = DFT(x, length=N)
-        idft = IDFT(dft, length=N)
-        dir_name = f'./2_{N}_'
-        os.mkdir(dir_name)
-        idft.update(t_label=r"$n$", x_label=r"$Re(x(n))$", y_label=r"$Im(x(n))$", save=True, save_dir=dir_name)
-        idft.draw()
-
-    x = [2, 3, 1, 4, 5]
-    h = [2, 1, 7, 4, 5, 7, 2, 3]
-    dir_name = f'./3_1'
-    os.mkdir(dir_name)
-    x_ = RealSeqSignal(x, start=0, end=len(x) - 1)
-    h_ = RealSeqSignal(h, start=0, end=len(h) - 1)
-    n = len(x) + len(h) - 1
-    d1 = DFT(x_, length=n)
-    d2 = DFT(h_, length=n)
-    y = IDFT(d1 * d2)
-    y.update(t_label=r"$n$", x_label=r"$Re(x(n))$", y_label=r"$Im(x(n))$", save=True, save_dir=dir_name)
-    y.draw()
-
-    dir_name = f'./3_2'
-    os.mkdir(dir_name)
-    cov = (x_ ** h_)
-    cov.update(t_label=r"$n$", x_label=r"$x(n)$", save=True, save_dir=dir_name)
-    cov.draw()
+    image = './images/1.jpg'
+    save_dir = './images'
+    noise()
+    psnr()
